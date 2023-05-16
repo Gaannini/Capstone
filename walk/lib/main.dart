@@ -1,7 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'package:shake/shake.dart';
+import 'package:pedometer/pedometer.dart';
 import 'package:step_progress_indicator/step_progress_indicator.dart';
 
 void main() {
@@ -31,64 +31,65 @@ class WalkWidget extends StatefulWidget {
 }
 
 class _WalkWidgetState extends State<WalkWidget> {
-  int walk = 0;
-  ShakeDetector? shakeDetector;
+  //int walk = 0;
+  //ShakeDetector? shakeDetector;
   late Timer timer;
   int totaltime = 0;
+  bool isRunning = false;
+  late Stream<StepCount> _stepCountStream;
+  String _steps = '?';
+  final int step = StepCount as int;
+
+  void startpressed() {
+    initPlatformState();
+    timer = Timer.periodic(
+      const Duration(seconds: 1),
+      onTick,
+    );
+    setState(() {
+      isRunning = true;
+    });
+  }
+
+  void onStepCount(StepCount event) {
+    print(event);
+    setState(() {
+      _steps = (step - event.steps) as String;
+    });
+  }
+
+  void onStepCountError(error) {
+    print('onStepCountError: $error');
+    setState(() {
+      _steps = 'Step Count not available';
+    });
+  }
+
+  void initPlatformState() {
+    _stepCountStream = Pedometer.stepCountStream;
+    _stepCountStream.listen(onStepCount).onError(onStepCountError);
+
+    if (!mounted) return;
+  }
 
   String format(int seconds) {
     var duration = Duration(seconds: seconds);
-    return duration.toString().split(".").first.substring(2, 7);
+    return duration.toString().split(".").first;
   }
 
-  void Time(Timer timer) {
+  void onTick(Timer timer) {
     setState(() {
       totaltime = totaltime + 1;
     });
   }
 
-  void onPhoneShake() {
-    setState(() {
-      walk = walk + 1;
-    });
-  }
-
-  void startWalk() {
-    setState(() {
-      timer = Timer.periodic(
-        const Duration(seconds: 1),
-        Time,
-      );
-    });
-  }
-
-  void stopWalk() {
-    setState(() {
-      timer.cancel();
-    });
-  }
-
-  @override
-  void initState() {
-    super.initState();
-
-    shakeDetector = ShakeDetector.autoStart(
-      // 흔들기 감지 즉시 시작
-      shakeSlopTimeMS: 1, // 감지 주기
-      shakeThresholdGravity: 2.7, // 감지 민감도
-      onPhoneShake: onPhoneShake, // 감지 후 실행할 함수
-    );
-    shakeDetector = ShakeDetector.autoStart(
-      shakeThresholdGravity: 2.7, // 감지 민감도
-      onPhoneShake: startWalk, // 감지 후 실행할 함수
-    );
-  }
-
-  @override
-  void dispose() {
-    shakeDetector!.stopListening(); // 흔들기 감지 중지
-    stopWalk();
-    super.dispose();
+  void stoppressed() {
+    if (mounted) {
+      setState(() {
+        isRunning = false;
+        timer.cancel();
+      });
+    }
   }
 
   @override
@@ -107,7 +108,7 @@ class _WalkWidgetState extends State<WalkWidget> {
                     ),
                     CircularStepProgressIndicator(
                       totalSteps: 100,
-                      currentStep: (0.01 * walk).floor(),
+                      currentStep: (0.01 * int.parse(_steps)).floor(),
                       stepSize: 30,
                       selectedColor: Colors.green[200],
                       unselectedColor: Colors.grey[200],
@@ -118,7 +119,7 @@ class _WalkWidgetState extends State<WalkWidget> {
                       roundedCap: (_, __) => false,
                       child: Center(
                         child: Text(
-                          '$walk',
+                          _steps,
                           style: const TextStyle(
                             fontSize: 30,
                             fontWeight: FontWeight.bold,
@@ -172,6 +173,17 @@ class _WalkWidgetState extends State<WalkWidget> {
                             ],
                           ),
                         ],
+                      ),
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.all(15),
+                      child: ElevatedButton(
+                        style: ButtonStyle(
+                          backgroundColor:
+                              MaterialStateProperty.all(Colors.green[100]),
+                        ),
+                        onPressed: isRunning ? stoppressed : startpressed,
+                        child: Text(isRunning ? 'STOP' : 'START'),
                       ),
                     ),
                   ],
