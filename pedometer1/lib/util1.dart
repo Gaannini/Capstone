@@ -327,6 +327,7 @@ class _HealthAppState extends State<HealthApp> {
                     const Text("stop", style: TextStyle(color: Colors.white))),
             TextButton(
                 onPressed: () {
+                  func();
                   print('check');
                   print('step: $start_nofSteps');
                   print('cal : $start_calories');
@@ -338,7 +339,7 @@ class _HealthAppState extends State<HealthApp> {
                   print('min : $_min');
                   print('dis : $_dis');
                 },
-                child: const Text("값확인")),
+                child: const Text("값확인"))
           ],
         ),
       ),

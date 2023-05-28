@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:health/health.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:step_progress_indicator/step_progress_indicator.dart';
+import 'package:timer_builder/timer_builder.dart';
 
 void main() => runApp(const HealthApp());
 
@@ -29,10 +30,22 @@ enum AppState {
 }
 
 class _HealthAppState extends State<HealthApp> {
-  List<HealthDataPoint> _healthDataList = [];
+  final List<HealthDataPoint> _healthDataListcal = [];
+  final List<HealthDataPoint> _healthDataListmin = [];
+  final List<HealthDataPoint> _healthDataListdis = [];
   AppState _state = AppState.DATA_NOT_FETCHED;
+  int start_nofSteps = 0;
+  double start_calories = 0;
+  double start_min = 0;
+  double start_dis = 0;
   int _nofSteps = 0;
   double _calories = 0;
+  double _min = 0;
+  double _dis = 0;
+
+  List<HealthDataPoint> callist = [];
+  List<HealthDataPoint> minlist = [];
+  List<HealthDataPoint> distancelist = [];
 
   // Define the types to get.
   // NOTE: These are only the ones supported on Androids new API Health Connect.
@@ -43,6 +56,8 @@ class _HealthAppState extends State<HealthApp> {
   static final types = [
     HealthDataType.STEPS,
     HealthDataType.ACTIVE_ENERGY_BURNED,
+    HealthDataType.MOVE_MINUTES,
+    HealthDataType.DISTANCE_DELTA
   ];
   final permissions = types.map((e) => HealthDataAccess.READ_WRITE).toList();
 
@@ -81,40 +96,49 @@ class _HealthAppState extends State<HealthApp> {
   }
 
   /// Fetch data points from the health plugin and show them in the app.
-  Future fetchData() async {
-    setState(() => _state = AppState.FETCHING_DATA);
+  // Future fetchData() async {
+  //   setState(() => _state = AppState.FETCHING_DATA);
 
-    // get data within the last 24 hours
-    final now = DateTime.now();
-    final yesterday = now.subtract(const Duration(hours: 24));
-    final midnight = DateTime(now.year, now.month, now.day);
+  //   // get data within the last 24 hours
+  //   final now = DateTime.now();
+  //   final yesterday = now.subtract(const Duration(hours: 24));
+  //   final midnight = DateTime(now.year, now.month, now.day);
 
-    // Clear old data points
-    _healthDataList.clear();
+  //   // Clear old data points
+  //   _healthDataListcal.clear();
 
-    try {
-      // fetch health data
-      List<HealthDataPoint> healthData =
-          await health.getHealthDataFromTypes(midnight, now, types);
-      // save all the new data points (only the first 100)
-      _healthDataList.addAll(
-          (healthData.length < 100) ? healthData : healthData.sublist(0, 100));
-    } catch (error) {
-      print("Exception in getHealthDataFromTypes: $error");
+  //   try {
+  //     // fetch health data
+  //     List<HealthDataPoint> healthData =
+  //         await health.getHealthDataFromTypes(midnight, now, types);
+  //     // save all the new data points (only the first 100)
+  //     _healthDataListcal.addAll(
+  //         (healthData.length < 100) ? healthData : healthData.sublist(0, 100));
+  //   } catch (error) {
+  //     print("Exception in getHealthDataFromTypes: $error");
+  //   }
+
+  //   // filter out duplicates
+  //   _healthDataListcal = HealthFactory.removeDuplicates(_healthDataList);
+
+  //   // print the results
+  //   for (var x in _healthDataListcal) {
+  //     print(x);
+  //   }
+
+  //   // update the UI to display the results
+  //   setState(() {
+  //     _state = _healthDataList.isEmpty ? AppState.NO_DATA : AppState.DATA_READY;
+  //   });
+  // }
+
+  double startvalue(List<HealthDataPoint> list) {
+    double value = 0;
+    for (var i = 0; i < list.length; i++) {
+      String a = list[i].value.toString();
+      value += double.parse(a);
     }
-
-    // filter out duplicates
-    _healthDataList = HealthFactory.removeDuplicates(_healthDataList);
-
-    // print the results
-    for (var x in _healthDataList) {
-      print(x);
-    }
-
-    // update the UI to display the results
-    setState(() {
-      _state = _healthDataList.isEmpty ? AppState.NO_DATA : AppState.DATA_READY;
-    });
+    return value;
   }
 
   /// Add some random health data.
@@ -196,10 +220,9 @@ class _HealthAppState extends State<HealthApp> {
 
   /// Fetch steps from the health plugin and show them in the app.
   Future fetchStepData() async {
-    List<HealthDataType> cal = [
-      HealthDataType.ACTIVE_ENERGY_BURNED,
-    ];
-    List<HealthDataPoint> callist = [];
+    List<HealthDataType> cal = [HealthDataType.ACTIVE_ENERGY_BURNED];
+    List<HealthDataType> min = [HealthDataType.MOVE_MINUTES];
+    List<HealthDataType> distance = [HealthDataType.DISTANCE_DELTA];
     int? steps;
     final now = DateTime.now();
     final midnight = DateTime(now.year, now.month, now.day);
@@ -212,14 +235,23 @@ class _HealthAppState extends State<HealthApp> {
     if (requestedstep && requestedcal) {
       try {
         steps = await health.getTotalStepsInInterval(midnight, now);
+        start_nofSteps = steps!;
         callist = await health.getHealthDataFromTypes(midnight, now, cal);
+        minlist = await health.getHealthDataFromTypes(midnight, now, min);
+        distancelist =
+            await health.getHealthDataFromTypes(midnight, now, distance);
       } catch (error) {
         print("Caught exception in getTotalStepsInInterval: $error");
       }
 
       setState(() {
         _nofSteps = (steps == null) ? 0 : steps;
-        _healthDataList = callist;
+        // _healthDataListcal = callist;
+        // _healthDataListmin = minlist;
+        // _healthDataListdis = distancelist;
+        _calories = startvalue(callist) - start_calories;
+        _min = startvalue(minlist) - start_min;
+        _dis = startvalue(distancelist) - start_dis;
         _state = (steps == null) ? AppState.NO_DATA : AppState.STEPS_READY;
       });
     } else {
@@ -252,9 +284,9 @@ class _HealthAppState extends State<HealthApp> {
 
   Widget _contentDataReady() {
     return ListView.builder(
-        itemCount: _healthDataList.length,
+        itemCount: _healthDataListcal.length,
         itemBuilder: (_, index) {
-          HealthDataPoint p = _healthDataList[index];
+          HealthDataPoint p = _healthDataListcal[index];
           if (p.value is AudiogramHealthValue) {
             return ListTile(
               title: Text("${p.typeString}: ${p.value}"),
@@ -313,97 +345,96 @@ class _HealthAppState extends State<HealthApp> {
   }
 
   Widget _stepsFetched() {
-    for (var i = 0; i < _healthDataList.length; i++) {
-      String a = _healthDataList[i].value.toString();
-      _calories += double.parse(a);
-    }
-    return Scaffold(
-      body: SingleChildScrollView(
-        child: Column(
-          children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(30, 0, 30, 0),
-              child: Container(
-                child: Column(
-                  children: <Widget>[
-                    const SizedBox(
-                      height: 50,
-                    ),
-                    CircularStepProgressIndicator(
-                      totalSteps: 100,
-                      currentStep: (0.01 * _nofSteps).floor(),
-                      stepSize: 30,
-                      selectedColor: Colors.green[200],
-                      unselectedColor: Colors.grey[200],
-                      padding: 0,
-                      width: 250,
-                      height: 250,
-                      selectedStepSize: 30,
-                      roundedCap: (_, __) => false,
-                      child: Center(
-                        child: Text(
-                          '$_nofSteps',
-                          style: const TextStyle(
-                            fontSize: 30,
-                            fontWeight: FontWeight.bold,
-                            color: Color.fromARGB(255, 0, 0, 0),
+    return TimerBuilder.periodic(const Duration(seconds: 2),
+        builder: (context) {
+      return Scaffold(
+        body: SingleChildScrollView(
+          child: Column(
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(30, 0, 30, 0),
+                child: Container(
+                  child: Column(
+                    children: <Widget>[
+                      const SizedBox(
+                        height: 50,
+                      ),
+                      CircularStepProgressIndicator(
+                        totalSteps: 100,
+                        currentStep: (0.01 * _nofSteps).floor(),
+                        stepSize: 30,
+                        selectedColor: Colors.green[200],
+                        unselectedColor: Colors.grey[200],
+                        padding: 0,
+                        width: 250,
+                        height: 250,
+                        selectedStepSize: 30,
+                        roundedCap: (_, __) => false,
+                        child: Center(
+                          child: Text(
+                            '$_nofSteps',
+                            style: const TextStyle(
+                              fontSize: 30,
+                              fontWeight: FontWeight.bold,
+                              color: Color.fromARGB(255, 0, 0, 0),
+                            ),
                           ),
                         ),
                       ),
-                    ),
-                    const SizedBox(
-                      height: 50,
-                    ),
-                    Center(
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          const Column(
-                            children: [
-                              Icon(
-                                Icons.timeline,
-                                size: 60,
-                                color: Color.fromARGB(255, 48, 158, 248),
-                              ),
-                              Text('거리'),
-                              Text('3.92KM'),
-                            ],
-                          ),
-                          const SizedBox(width: 50),
-                          Column(
-                            children: [
-                              const Icon(
-                                Icons.local_fire_department,
-                                size: 60,
-                                color: Color.fromARGB(255, 236, 83, 18),
-                              ),
-                              const Text('칼로리'),
-                              Text(_calories.toString()),
-                            ],
-                          ),
-                          const SizedBox(width: 50),
-                          const Column(
-                            children: [
-                              Icon(
-                                Icons.timer,
-                                size: 60,
-                                color: Color.fromARGB(255, 255, 208, 66),
-                              ),
-                              Text('시간'),
-                              Text(''),
-                            ],
-                          ),
-                        ],
+                      const SizedBox(
+                        height: 50,
                       ),
-                    ),
-                  ],
+                      Center(
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Column(
+                              children: [
+                                const Icon(
+                                  Icons.timeline,
+                                  size: 60,
+                                  color: Color.fromARGB(255, 48, 158, 248),
+                                ),
+                                const Text('거리'),
+                                Text((_dis).floor().toString()),
+                              ],
+                            ),
+                            const SizedBox(width: 50),
+                            Column(
+                              children: [
+                                const Icon(
+                                  Icons.local_fire_department,
+                                  size: 60,
+                                  color: Color.fromARGB(255, 236, 83, 18),
+                                ),
+                                const Text('칼로리'),
+                                Text((_calories).floor().toString()),
+                              ],
+                            ),
+                            const SizedBox(width: 50),
+                            Column(
+                              children: [
+                                const Icon(
+                                  Icons.timer,
+                                  size: 60,
+                                  color: Color.fromARGB(255, 255, 208, 66),
+                                ),
+                                const Text('시간'),
+                                Text((_min).floor().toString()),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
-      ),
-    );
+      );
+    });
   }
 
   Widget _dataNotAdded() {
@@ -459,13 +490,13 @@ class _HealthAppState extends State<HealthApp> {
                               MaterialStatePropertyAll(Colors.blue)),
                       child: const Text("Auth",
                           style: TextStyle(color: Colors.white))),
-                  TextButton(
-                      onPressed: fetchData,
-                      style: const ButtonStyle(
-                          backgroundColor:
-                              MaterialStatePropertyAll(Colors.blue)),
-                      child: const Text("Fetch Data",
-                          style: TextStyle(color: Colors.white))),
+                  // TextButton(
+                  //     onPressed: fetchData,
+                  //     style: const ButtonStyle(
+                  //         backgroundColor:
+                  //             MaterialStatePropertyAll(Colors.blue)),
+                  //     child: const Text("Fetch Data",
+                  //         style: TextStyle(color: Colors.white))),
                   TextButton(
                       onPressed: addData,
                       style: const ButtonStyle(
@@ -493,6 +524,42 @@ class _HealthAppState extends State<HealthApp> {
                           backgroundColor:
                               MaterialStatePropertyAll(Colors.blue)),
                       child: const Text("Revoke Access",
+                          style: TextStyle(color: Colors.white))),
+                  TextButton(
+                      onPressed: () {
+                        setState(() {
+                          start_nofSteps = _nofSteps;
+                          start_calories = startvalue(callist);
+                          start_min = startvalue(minlist);
+                          start_dis = startvalue(distancelist);
+                        });
+                        print(start_nofSteps);
+                        print(start_calories);
+                        print(start_min);
+                        print(start_dis);
+                      },
+                      style: const ButtonStyle(
+                          backgroundColor:
+                              MaterialStatePropertyAll(Colors.blue)),
+                      child: const Text("start",
+                          style: TextStyle(color: Colors.white))),
+                  TextButton(
+                      onPressed: () {
+                        setState(() {
+                          _nofSteps = _nofSteps - start_nofSteps;
+                          _calories = startvalue(callist) - start_calories;
+                          _min = startvalue(minlist) - start_min;
+                          _dis = startvalue(distancelist) - start_dis;
+                        });
+                        print('check');
+                        print(start_calories);
+                        print(_min);
+                        print(_dis);
+                      },
+                      style: const ButtonStyle(
+                          backgroundColor:
+                              MaterialStatePropertyAll(Colors.blue)),
+                      child: const Text("stop",
                           style: TextStyle(color: Colors.white))),
                 ],
               ),
